@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -24,34 +24,47 @@ cc_library(
         "adapter/corrected_imu_adapter.cc",
         "adapter/pointcloud_view_adapter.cc",
         "adapter/sensor_contract.cc",
+        "adapter/vanjee_imu_adapter.cc",
     ],
     hdrs = [
-        "adapter/runtime_data.h",
         "adapter/corrected_imu_adapter.h",
         "adapter/pointcloud_view_adapter.h",
+        "adapter/runtime_data.h",
         "adapter/sensor_contract.h",
-        "core/ros_compat.h",
+        "adapter/vanjee_imu_adapter.h",
         "core/include/color.h",
         "core/include/common_lib.h",
         "core/include/scope_timer.hpp",
         "core/include/so3_math.h",
+        "core/ros_compat.h",
     ],
     copts = FAST_LIO2_COPTS,
     deps = [
         "//modules/fast_lio2/proto:fast_lio2_runtime_conf_cc_proto",
+        "//modules/fast_lio2/proto:vanjee_imu_wire_cc_proto",
+        "@eigen",
+        "@local_config_pcl//:common",
         "@wheelos_core//cyber",
         "@wheelos_msgs//wheelos_msgs/localization_msgs:imu_cc_proto",
         "@wheelos_msgs//wheelos_msgs/sensor_msgs:pointcloud_cc_proto",
-        "@eigen",
-        "@local_config_pcl//:common",
+    ],
+)
+
+cc_test(
+    name = "vanjee_imu_adapter_test",
+    srcs = ["adapter/vanjee_imu_adapter_test.cc"],
+    copts = FAST_LIO2_COPTS,
+    deps = [
+        ":fast_lio2_adapter",
+        "//modules/fast_lio2/proto:vanjee_imu_wire_cc_proto",
     ],
 )
 
 cc_library(
     name = "fast_lio2_runtime_core",
     srcs = [
-        "core/include/ikd-Tree/ikd_Tree.cpp",
         "core/fast_lio2_runtime_core.cc",
+        "core/include/ikd-Tree/ikd_Tree.cpp",
     ],
     hdrs = glob([
         "core/*.h",

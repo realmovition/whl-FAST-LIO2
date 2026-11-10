@@ -21,13 +21,24 @@ vendor-specific point fields.
 is an operator assertion, not a coordinate conversion. It may be enabled only
 after checking the producer's frame and sensor-time semantics.
 
+`VANJEE_IMU` accepts `apollo.drivers.vanjee.VanjeeImu` through a Cyber raw
+reader and a local wire projection, avoiding a dependency on the hardware
+driver or a duplicate registration of its protobuf message. Field numbers and
+types in `proto/vanjee_imu_wire.proto` must match the driver's schema.
+`measurement_time` is already in the selected LiDAR clock domain (Unix seconds
+for the validated driver mode), not GPS-epoch seconds. The driver supplies
+SDK-calibrated m/s² and rad/s in `header.frame_id`; no additional rotation,
+acceleration scaling, or GPS offset is applied. Require a producer-verified
+LiDAR-to-IMU extrinsic for qualified mapping; identity is only an explicit
+diagnostic assumption when calibration is unavailable.
+
 ## Required LiDAR semantics
 
 | Field | Contract |
 | --- | --- |
 | Coordinates | Finite `x/y/z` points in the LiDAR frame, metres. |
-| Point timestamp | Monotonic Unix epoch nanoseconds for the current Vanjee adapter. |
-| Scan time | First and last point define a positive scan interval. |
+| Point timestamp | Nanoseconds in the selected Vanjee SDK clock domain; timestamps must be monotonic and their interval must align with the configured IMU time basis. The adapter does not normalize the epoch. Treat timestamps as Unix epoch only for specifically validated driver modes. |
+| Scan time | First and last point define a positive scan interval; sensor-time mode requires the scan and IMU times to share a clock basis. |
 | Deskew time | Adapter stores `point_time - scan_start` as milliseconds in PCL `curvature`, the upstream FAST-LIO convention. |
 
 Ring, return type, tag, line, RGB, and map/global pose are not FAST-LIO core

@@ -6,6 +6,11 @@ readonly VERSION="7.6.2"
 readonly CACHE_DIR="${XDG_CACHE_HOME:-${HOME}/.cache}/whl-fast-lio2"
 readonly BAZEL_BIN="${CACHE_DIR}/bazel-${VERSION}"
 
+if command -v bazel >/dev/null 2>&1 &&
+   [[ "$(bazel --version)" == "bazel ${VERSION}" ]]; then
+  exec bazel "$@"
+fi
+
 case "$(uname -m)" in
   x86_64)
     readonly ARCH="x86_64"
