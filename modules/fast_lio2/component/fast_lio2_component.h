@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "cyber/component/component.h"
+#include "cyber/message/raw_message.h"
 #include "modules/fast_lio2/adapter/runtime_data.h"
 #include "modules/fast_lio2/core/fast_lio2_runtime_core.h"
 #include "modules/fast_lio2/proto/fast_lio2_runtime_conf.pb.h"
@@ -56,6 +57,10 @@ class FastLio2Component final : public apollo::cyber::Component<> {
   void RawImuCallback(
       const std::shared_ptr<apollo::drivers::gnss::Imu>& imu,
       double receive_time_sec);
+  void VanjeeImuCallback(
+      const std::shared_ptr<apollo::cyber::message::RawMessage>& imu,
+      double receive_time_sec);
+  void QueueImuSample(FastLio2ImuSample imu);
   void WorkerLoop();
   void PublishOutputs(double processing_latency_ms);
   void PublishLocalization(
@@ -77,6 +82,8 @@ class FastLio2Component final : public apollo::cyber::Component<> {
       imu_reader_;
   std::shared_ptr<apollo::cyber::Reader<apollo::drivers::gnss::Imu>>
       raw_imu_reader_;
+  std::shared_ptr<apollo::cyber::Reader<apollo::cyber::message::RawMessage>>
+      vanjee_imu_reader_;
   std::shared_ptr<apollo::cyber::Writer<apollo::localization::LocalizationEstimate>>
       localization_writer_;
   std::shared_ptr<

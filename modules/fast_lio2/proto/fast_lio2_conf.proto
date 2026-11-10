@@ -9,6 +9,7 @@ message FastLio2Conf {
   enum ImuMessageType {
     CORRECTED_IMU = 0;
     RAW_GNSS_IMU = 1;
+    VANJEE_IMU = 2;
   }
   optional ImuMessageType imu_message_type = 3 [default = RAW_GNSS_IMU];
 

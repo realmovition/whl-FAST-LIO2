@@ -29,6 +29,7 @@
 #include "modules/fast_lio2/adapter/corrected_imu_adapter.h"
 #include "modules/fast_lio2/adapter/pointcloud_view_adapter.h"
 #include "modules/fast_lio2/adapter/sensor_contract.h"
+#include "modules/fast_lio2/adapter/vanjee_imu_adapter.h"
 
 namespace apollo {
 namespace localization {
@@ -126,12 +127,26 @@ bool FastLio2Component::Init() {
         [this](const std::shared_ptr<apollo::drivers::gnss::Imu>& msg) {
           this->RawImuCallback(msg, apollo::cyber::Clock::NowInSeconds());
         });
+  } else if (conf_.imu_message_type() == FastLio2Conf::VANJEE_IMU) {
+    // DDS history is separate from pending_queue_size; depth one can lose IMU.
+    auto vanjee_config = imu_config;
+    vanjee_config.qos_profile.set_depth(1000);
+    vanjee_imu_reader_ =
+        node_->CreateReader<apollo::cyber::message::RawMessage>(
+            vanjee_config,
+            [this](const std::shared_ptr<apollo::cyber::message::RawMessage>& msg) {
+              this->VanjeeImuCallback(msg, apollo::cyber::Clock::NowInSeconds());
+            });
   } else {
     imu_reader_ = node_->CreateReader<apollo::localization::CorrectedImu>(
         imu_config,
         [this](const std::shared_ptr<apollo::localization::CorrectedImu>& msg) {
           this->ImuCallback(msg, apollo::cyber::Clock::NowInSeconds());
         });
+  }
+  if (!raw_imu_reader_ && !imu_reader_ && !vanjee_imu_reader_) {
+    AERROR << "Failed to initialize FAST-LIO2 IMU reader.";
+    return false;
   }
 
   apollo::cyber::ReaderConfig pointcloud_config;
@@ -292,21 +307,7 @@ void FastLio2Component::ImuCallback(
     imu_sample.timestamp_sec = receive_time_sec;
   }
 
-  {
-    std::lock_guard<std::mutex> lock(queue_mutex_);
-    const size_t max_pending =
-        static_cast<size_t>(std::max(1000, conf_.max_pending_imu_messages()));
-    while (pending_imus_.size() >= max_pending) {
-      pending_imus_.pop_front();
-      ++dropped_imu_messages_;
-      if (dropped_imu_messages_ % 1000 == 1) {
-        AWARN << "Drop old pending FAST-LIO2 IMU messages. total_dropped="
-              << dropped_imu_messages_;
-      }
-    }
-    pending_imus_.push_back(std::move(imu_sample));
-  }
-  queue_cv_.notify_one();
+  QueueImuSample(std::move(imu_sample));
 }
 
 void FastLio2Component::RawImuCallback(
@@ -340,6 +341,30 @@ void FastLio2Component::RawImuCallback(
     return;
   }
 
+  QueueImuSample(std::move(imu_sample));
+}
+
+void FastLio2Component::VanjeeImuCallback(
+    const std::shared_ptr<apollo::cyber::message::RawMessage>& imu,
+    double receive_time_sec) {
+  if (!imu) {
+    AWARN << "Drop null FAST-LIO2 VanjeeImu.";
+    return;
+  }
+  ++imu_messages_received_;
+  FastLio2ImuSample sample;
+  std::string error;
+  if (!ConvertVanjeeImu(imu->message, &sample, &error)) {
+    AWARN << "Drop FAST-LIO2 VanjeeImu: " << error;
+    return;
+  }
+  if (conf_.timestamp_mode() == FastLio2Conf::RECEIVE_TIME) {
+    sample.timestamp_sec = receive_time_sec;
+  }
+  QueueImuSample(std::move(sample));
+}
+
+void FastLio2Component::QueueImuSample(FastLio2ImuSample imu) {
   {
     std::lock_guard<std::mutex> lock(queue_mutex_);
     const size_t max_pending =
@@ -348,11 +373,11 @@ void FastLio2Component::RawImuCallback(
       pending_imus_.pop_front();
       ++dropped_imu_messages_;
       if (dropped_imu_messages_ % 1000 == 1) {
-        AWARN << "Drop old pending FAST-LIO2 raw IMU messages. total_dropped="
+        AWARN << "Drop old pending FAST-LIO2 IMU messages. total_dropped="
               << dropped_imu_messages_;
       }
     }
-    pending_imus_.push_back(std::move(imu_sample));
+    pending_imus_.push_back(std::move(imu));
   }
   queue_cv_.notify_one();
 }
